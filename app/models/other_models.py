@@ -1,12 +1,7 @@
+# ОСТАЛЬНЫЕ МОДЕЛИ ДАННЫХ
 from datetime import datetime
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field
-
-
-
-class CancelTransactionErrorResponse(BaseModel):
-    code: int
-    message: str
 
 
 class ErrorResponse(BaseModel):
@@ -41,3 +36,15 @@ class InfoTransactionResponse(BaseModel):
     phone_number: Optional[str] = None  # Номер телефона (опционально)
     owner_name: Optional[str] = None  # Владелец счета (опционально)
     bank_name: str  # Название банка
+
+
+class WebhookRequest(BaseModel):
+    id: int # Идентификатор платежа в системе провайдера
+    merchant_transaction_id: str # Идентификатор платежа в системе мерчанта
+    type: str  # "in" или "out"
+    amount: str # # Сумма транзакции
+    paid_amount: str # Сумма, на которую была выполнена оплата
+    currency: str # Валюта
+    currency_rate: str # Курс валюты
+    amount_in_usd: str # Сумма транзакции в USD
+    status: str # Статус платежа

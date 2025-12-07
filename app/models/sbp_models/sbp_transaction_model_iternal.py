@@ -1,3 +1,4 @@
+# МОДЕЛИ ДАННЫХ (PayIn | СБП (внутрибанк))
 from datetime import datetime
 from pydantic import BaseModel
 

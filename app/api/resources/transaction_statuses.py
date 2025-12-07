@@ -1,5 +1,5 @@
-# app/api/resources/transaction_statuses.py
-from typing import List, Dict
+# СТАТУСЫ ПЛАТЕЖЕЙ
+from typing import List
 
 
 class TransactionStatuses:
@@ -25,7 +25,7 @@ class TransactionStatuses:
         STATUS_CHARGEBACK
     ]
 
-    # Типы платежных методов
+    # Типы поддерживаемых платежных методов
     PAYMENT_METHODS: List[str] = [
         "card",
         "sbp",

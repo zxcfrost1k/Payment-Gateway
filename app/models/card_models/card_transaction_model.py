@@ -1,4 +1,4 @@
-# МОДЕЛИ ДАННЫХ КАРТА
+# МОДЕЛИ ДАННЫХ (PayIn | Карта)
 import re
 
 from datetime import datetime
@@ -11,39 +11,39 @@ from app.api.resources.valid_res import valid_res
 
 class CardTransactionRequest(BaseModel):
     # Обязательные поля
-    amount: str = Field(..., min_length=1, description='Сумма заявки')
-    currency: str = Field(..., min_length=1, description='ISO код валюты')
-    merchant_transaction_id: str = Field(..., min_length=1, description='Идентификатор платежа')
+    amount: str = Field(..., min_length=1, description="Сумма заявки")
+    currency: str = Field(..., min_length=1, description="ISO код валюты")
+    merchant_transaction_id: str = Field(..., min_length=1, description="Идентификатор платежа")
     # Поля для уникализации
-    auto_amount_limit: Optional[int] = Field(default=0, ge=0, le=20, description='Количество шагов для подбора')
-    auto_amount_step: Optional[int] = Field(default=1, ge=1, description='Размер шага при подборе')
+    auto_amount_limit: Optional[int] = Field(default=0, ge=0, le=20, description="Количество шагов для подбора")
+    auto_amount_step: Optional[int] = Field(default=1, ge=1, description="Размер шага при подборе")
     # Опциональные поля
-    currency_rate: Optional[str] = Field(None, description='Курс валюты')
-    client_id: Optional[str] = Field(None, description='Идентификатор клиента')
+    currency_rate: Optional[str] = Field(None, description="Курс валюты")
+    client_id: Optional[str] = Field(None, description="Идентификатор клиента")
 
-    @field_validator('amount')  # Валидация поля amount
+    @field_validator("amount")  # Валидация поля amount
     @classmethod
     def validate_amount(csl, value: str) -> str:
         try:
             amount = Decimal(value)
-            if not re.match(r'^\d+$', value.strip()):
-                raise ValueError('Поле amount должно быть целым числом')
+            if not re.match(r"^\d+$", value.strip()):
+                raise ValueError("Поле amount должно быть целым числом")
             if amount <= 0:
-                raise ValueError('Поле amount должно быть положительным числом')
-            if value.startswith('0'):
-                raise ValueError('Неправильный формат поля amount')
+                raise ValueError("Поле amount должно быть положительным числом")
+            if value.startswith("0"):
+                raise ValueError("Неправильный формат поля amount")
         except (ValueError, InvalidOperation):
-            raise ValueError('Неправильный формат поля amount')
+            raise ValueError("Неправильный формат поля amount")
         return value
 
-    @field_validator('currency')  # Валидация поля currency
+    @field_validator("currency")  # Валидация поля currency
     @classmethod
     def validate_currency(csl, value: str) -> str:
         if value in valid_res.valid_currency:
             return value
-        raise ValueError('Неправильный формат поля currency')
+        raise ValueError("Неправильный формат поля currency")
 
-    @field_validator('currency_rate') # Валидация поля currency_rate
+    @field_validator("currency_rate") # Валидация поля currency_rate
     @classmethod
     def validate_currency_rate(csl, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -52,25 +52,25 @@ class CardTransactionRequest(BaseModel):
         try:
             currency_rate = Decimal(value)
             if currency_rate <= 0:
-                raise ValueError('Поле currency_rate должно быть положительным числом')
+                raise ValueError("Поле currency_rate должно быть положительным числом")
         except (ValueError, InvalidOperation):
-            raise ValueError('Неправильный формат поля currency_rate')
+            raise ValueError("Неправильный формат поля currency_rate")
         return value
 
-    @field_validator('client_id') # Валидация поля client_id
+    @field_validator("client_id") # Валидация поля client_id
     @classmethod
     def validate_client_id(csl, value: str) -> Optional[str]:
         return value
 
-    @field_validator('merchant_transaction_id') # Валидация поля merchant_transaction_id
+    @field_validator("merchant_transaction_id") # Валидация поля merchant_transaction_id
     @classmethod
     def validate_transaction_id(csl, value: str) -> Optional[str]:
         return value
 
 
 class CardTransactionResponse(BaseModel):
-    id: int  # Идентификатор платежа (их)
-    merchant_transaction_id: str  # Идентификатор платежа (наш)
+    id: int  # Идентификатор платежа в системе провайдера
+    merchant_transaction_id: str  # Идентификатор платежа в системе мерчанта
     expires_at: datetime  # Срок действия платежа
     amount: str  # Сумма транзакции
     currency: str  # Валюта
