@@ -16,11 +16,11 @@ class Settings(BaseSettings):
     debug: bool = True
 
     # Настройки вебхуков
-    webhook_enabled: bool = False
-    webhook_secret_key: str = ""
+    webhook_enabled: bool = True
+    webhook_secret_key: str = "test_secret_key_123"
 
     # URL приложения для формирования подписи
-    base_webhook_url: str = "https://airpay.com"
+    base_webhook_url: str = "http://localhost:8000"
 
     class Config:
         env_file = "../set.env"

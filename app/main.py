@@ -1,17 +1,20 @@
 # ОСНОВНОЕ ПРИЛОЖЕНИЕ
 import logging
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from typing import Dict, List, Optional, Any
 from fastapi import Request
 
+from app.api.routers.webhook_router import router as webhook_router
 from app.api.services.provider_service import provider_service
 from app.models.card_models.in_card_transaction_internal_bank_model import InInternalCardTransactionRequest
 from app.models.card_models.in_card_transaction_model import InCardTransactionRequest
 from app.models.card_models.out_card_transaction_model import OutCardTransactionRequest
 from app.models.other_models import ErrorResponse
 from app.models.sbp_models.out_sbp_transaction_model import OutSbpTransactionRequest
+
 
 # Настройка логгера
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +27,10 @@ app = FastAPI(
     description="Сервис трансляции API между нашей системой и провайдером",
     version="1.0"
 )
+
+
+# Подключение роутеров
+app.include_router(webhook_router, prefix="/api/v1/transactions", tags=["webhooks"])
 
 
 # Создание ответа об ошибке

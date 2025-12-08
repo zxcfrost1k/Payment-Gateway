@@ -1,3 +1,4 @@
+# ПОДПИСЬ (вебхук)
 import hashlib
 import hmac
 import json
@@ -8,29 +9,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# Вычисление подписи для вебхука
 def calculate_signature(url: str, request_body: Dict[str, Any], secret: str) -> str:
-    """
-    Вычисление подписи для вебхука
-
-    Args:
-        url: Полный URL вебхука
-        request_body: Тело запроса в виде словаря
-        secret: Секретный ключ для подписи
-
-    Returns:
-        HEX-строка подписи в нижнем регистре
-    """
     try:
         # Преобразуем тело запроса в JSON-строку
-        request_json_string = json.dumps(request_body, separators=(",", ":"))
+        request_json_string = json.dumps(request_body)
 
         # Парсим URL
         parsed_url = urlparse(url)
 
         # Формируем строку для подписи: тело + путь + параметры запроса
-        signature_string = request_json_string + parsed_url.path
-        if parsed_url.query:
-            signature_string += "?" + parsed_url.query
+        signature_string = request_json_string + parsed_url.path + parsed_url.query
 
         # Вычисляем HMAC SHA-256
         signature = hmac.new(
@@ -46,19 +35,8 @@ def calculate_signature(url: str, request_body: Dict[str, Any], secret: str) -> 
         raise
 
 
+# Проверка подписи вебхука
 def verify_signature(url: str, request_body: Dict[str, Any], signature_header: str, secret: str) -> bool:
-    """
-    Проверка подписи вебхука
-
-    Args:
-        url: URL запроса
-        request_body: Тело запроса
-        signature_header: Значение заголовка X-Signature
-        secret: Секретный ключ
-
-    Returns:
-        True если подпись верна, иначе False
-    """
     if not signature_header:
         logger.warning("Отсутствует заголовок X-Signature")
         return False

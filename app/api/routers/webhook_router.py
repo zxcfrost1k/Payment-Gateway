@@ -133,35 +133,3 @@ async def update_transaction_status(
 
     # Временная заглушка
     pass
-
-
-# Тестовый эндпоинт для проверки вычисления подписи (удалить после тестирования)
-@router.get("/webhook/test")
-async def test_webhook_signature():
-    from app.api.services.signature_service import calculate_signature
-
-    test_data = {
-        "id": 12,
-        "merchant_transaction_id": "1000123213",
-        "type": "in",
-        "amount": "1000",
-        "paid_amount": "1000",
-        "currency": "RUB",
-        "currency_rate": "110",
-        "amount_in_usd": "5.50",
-        "status": "paid"
-    }
-
-    test_url = f"{settings.base_webhook_url}/api/v1/webhook/test/?queryParam1=123&queryParam2=456"
-
-    if not settings.webhook_secret_key:
-        return {"error": "Не настроен секретный ключ"}
-
-    signature = calculate_signature(test_url, test_data, settings.webhook_secret_key)
-
-    return {
-        "test_data": test_data,
-        "url": test_url,
-        "signature": signature,
-        "instructions": "Используйте эту подпись для тестирования в заголовке X-Signature"
-    }
