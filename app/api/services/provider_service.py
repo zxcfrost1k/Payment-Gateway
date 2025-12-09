@@ -26,7 +26,7 @@ from app.models.appeal_model import (
     AppealCreateResponse,
     AppealCreateRequest,
     AppealDetailResponse,
-    TransactionRequisite
+    TransactionRequisite, AppealListRequest, AppealListResponse, AppealListItem
 )
 from app.models.card_models.in_card_transaction_internal_bank_model import (
     InInternalCardTransactionRequest,
@@ -232,7 +232,7 @@ def _transform_limits_response(provider_data: dict) -> LimitsResponse:
         raise transform_provider_error(e)
 
 
-# Обращение к серверу провайдера
+# Преобразование формата провайдера (Просмотр апелляций)
 def _transform_appeal_response(provider_data: dict) -> AppealDetailResponse:
     try:
         # Преобразуем requisite если есть
@@ -264,6 +264,40 @@ def _transform_appeal_response(provider_data: dict) -> AppealDetailResponse:
         raise ValueError(f"Неверный формат ответа провайдера: отсутствует поле {e}")
 
 
+def _transform_appeals_list_response(provider_data: dict) -> AppealListResponse:
+    """Преобразование ответа провайдера в модель списка апелляций"""
+    try:
+        logger.info(f"Преобразование списка апелляций: {json.dumps(provider_data, ensure_ascii=False)}")
+
+        items = []
+        for item_data in provider_data.get("items", []):
+            item = AppealListItem(
+                id=int(item_data["id"]),
+                created_at=item_data["created_at"],
+                status=str(item_data["status"]),
+                amount=str(item_data["amount"]),
+                transaction_id=int(item_data["transaction_id"]),
+                merchant_transaction_id=str(item_data["merchant_transaction_id"])
+            )
+            items.append(item)
+
+        result = AppealListResponse(
+            items=items,
+            page_number=int(provider_data.get("page_number", 1)),
+            page_size=int(provider_data.get("page_size", 10))
+        )
+
+        logger.info(f"Преобразование списка завершено, элементов: {len(items)}")
+        return result
+
+    except KeyError as e:
+        logger.error(f"Отсутствует обязательное поле в ответе провайдера: {e}")
+        raise ValueError(f"Неверный формат ответа провайдера: отсутствует поле {e}")
+    except Exception as e:
+        logger.error(f"Ошибка при преобразовании списка апелляций: {str(e)}")
+        raise e
+
+
 class ProviderService:
     def __init__(self):
         self.client = httpx.AsyncClient(
@@ -272,7 +306,9 @@ class ProviderService:
         )
 
     # PayIn | Карта
-    async def create_card_transaction_in(self, request: InCardTransactionRequest) -> InCardTransactionResponse:
+    async def create_card_transaction_in(self,
+                                         request: InCardTransactionRequest
+                                         ) -> InCardTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_in(request)
             headers = {
@@ -299,8 +335,8 @@ class ProviderService:
 
     # PayIn | Карта (внутрибанк)
     async def create_card_transaction_internal_in(self,
-                                                  request: InInternalCardTransactionRequest)-> (
-            InInternalCardTransactionResponse):
+                                                  request: InInternalCardTransactionRequest
+                                                  )-> InInternalCardTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_internal_in(request)
             headers = {
@@ -327,7 +363,8 @@ class ProviderService:
 
     # PayIn | Карта (трансгран)
     async def create_card_transaction_transgran_in(self,
-                                                   request: InCardTransactionRequest) -> InInternalCardTransactionResponse:
+                                                   request: InCardTransactionRequest
+                                                   ) -> InInternalCardTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_in(request)
             headers = {
@@ -355,7 +392,8 @@ class ProviderService:
 
     # PayIn | СБП
     async def create_sbp_transaction_in(self,
-                                        request: InCardTransactionRequest) -> InSbpTransactionResponse:
+                                        request: InCardTransactionRequest
+                                        ) -> InSbpTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_in(request)
             headers = {
@@ -382,8 +420,8 @@ class ProviderService:
 
     # PayIn | СБП (внутрибанк)
     async def create_sbp_transaction_internal_in(self,
-                                                 request: InInternalCardTransactionRequest) ->(
-            InInternalSbpTransactionResponse):
+                                                 request: InInternalCardTransactionRequest
+                                                 ) -> InInternalSbpTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_internal_in(request)
             headers = {
@@ -410,7 +448,8 @@ class ProviderService:
 
     # PayIn | СБП (трансгран)
     async def create_sbp_transaction_transgran_in(self,
-                                                  request: InCardTransactionRequest) -> InInternalSbpTransactionResponse:
+                                                  request: InCardTransactionRequest
+                                                  ) -> InInternalSbpTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_in(request)
             headers = {
@@ -437,7 +476,8 @@ class ProviderService:
 
     # PayIn | QR НСПК
     async def create_qr_transaction_in(self,
-                                       request: InCardTransactionRequest) -> InQrTransactionResponse:
+                                       request: InCardTransactionRequest
+                                       ) -> InQrTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_in(request)
             headers = {
@@ -464,7 +504,8 @@ class ProviderService:
 
     # PayIn | СИМ-карта
     async def create_sim_transaction_in(self,
-                                        request: InCardTransactionRequest) -> InSimTransactionResponse:
+                                        request: InCardTransactionRequest
+                                        ) -> InSimTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_in(request)
             headers = {
@@ -490,7 +531,9 @@ class ProviderService:
             raise transform_provider_error(e)
 
     # PayIn | Отмена платежа
-    async def cancel_transaction(self, transaction_id: str) -> None | bool | Exception:
+    async def cancel_transaction(self,
+                                 transaction_id: str
+                                 ) -> None | bool | Exception:
         try:
             headers = {
                 "Authorization": f"Bearer {settings.provider_api_key}",
@@ -536,7 +579,9 @@ class ProviderService:
             raise Exception(transform_provider_error(e))
 
     # Информация о платеже
-    async def get_transaction_info(self, transaction_id: str) -> InfoTransactionResponse:
+    async def get_transaction_info(self,
+                                   transaction_id: str
+                                   ) -> InfoTransactionResponse:
         try:
             headers = {
                 "Authorization": f"Bearer {settings.provider_api_key}",
@@ -569,7 +614,9 @@ class ProviderService:
             raise transform_provider_error(e)
 
     # PayOut | Карта
-    async def create_card_transaction_out(self, request: OutCardTransactionRequest) -> OutCardTransactionResponse:
+    async def create_card_transaction_out(self,
+                                          request: OutCardTransactionRequest
+                                          ) -> OutCardTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_card_out(request)
             headers = {
@@ -595,7 +642,9 @@ class ProviderService:
             raise transform_provider_error(e)
 
     # PayOut | СБП
-    async def create_sbp_transaction_out(self, request: OutSbpTransactionRequest) -> OutSbpTransactionResponse:
+    async def create_sbp_transaction_out(self,
+                                         request: OutSbpTransactionRequest
+                                         ) -> OutSbpTransactionResponse:
         try:
             provider_payload = transform_to_provider_format_sbp_out(request)
             headers = {
@@ -660,7 +709,9 @@ class ProviderService:
             raise transform_provider_error(e)
 
     # Получение лимитов
-    async def get_limits(self, currency_code: str) -> LimitsResponse:
+    async def get_limits(self,
+                         currency_code: str
+                         ) -> LimitsResponse:
         try:
             headers = {
                 "Authorization": f"Bearer {settings.provider_api_key}",
@@ -771,7 +822,9 @@ class ProviderService:
             raise transform_provider_error(e)
 
     # Получение информации об апелляции
-    async def get_appeal_info(self, appeal_id: int) -> AppealDetailResponse:
+    async def get_appeal_info(self,
+                              appeal_id: int
+                              ) -> AppealDetailResponse:
         try:
             headers = {
                 "Authorization": f"Bearer {settings.provider_api_key}",
@@ -807,7 +860,41 @@ class ProviderService:
             logger.error(f"Ошибка при получении информации об апелляции {appeal_id}: {str(e)}")
             raise transform_provider_error(e)
 
-    # Преобразование формата провайдера (Просмотр апелляций)
+    # Получение списка апелляций с фильтрацией и пагинацией
+    async def get_appeals_list(
+            self,
+            request: AppealListRequest
+    ) -> AppealListResponse:
+        try:
+            headers = {
+                "Authorization": f"Bearer {settings.provider_api_key}",
+                "Content-Type": "application/json"
+            }
+
+            logger.info(f"Запрос списка апелляций с параметрами: {request.model_dump(exclude_none=True)}")
+
+            # Подготавливаем параметры запроса
+            params = request.model_dump(exclude_none=True)
+
+            # Реальный запрос к провайдеру
+            response = await self.client.get(
+                f"{settings.provider_base_url}/api/v1/appeals",
+                headers=headers,
+                params=params
+            )
+
+            response.raise_for_status()
+            provider_data = response.json()
+            logger.info(f"Получен список апелляций, количество: {len(provider_data.get('items', []))}")
+
+            return _transform_appeals_list_response(provider_data)
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP ошибка при запросе списка апелляций: {e.response.status_code}")
+            raise transform_provider_error(e)
+        except Exception as e:
+            logger.error(f"Ошибка при получении списка апелляций: {str(e)}")
+            raise transform_provider_error(e)
 
     # Выход из приложения
     async def close(self):

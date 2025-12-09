@@ -4,13 +4,13 @@ import json
 import logging
 from typing import Dict, Any
 
+from app.api.security.auth import security
 from app.core.config import settings
 from app.models.other_models import WebhookRequest
 from app.api.services.signature_service import verify_signature
 
 
 logger = logging.getLogger(__name__)
-# Объект роутера
 router = APIRouter()
 
 
@@ -60,10 +60,10 @@ async def verify_webhook_signature(request: Request):
 
 
 # Обработка входящих вебхуков об изменении статуса платежа
-@router.post("/webhook", status_code=status.HTTP_200_OK)
-async def handle_webhook(
+@router.post("/transaction", status_code=status.HTTP_200_OK)
+async def handle_transaction_webhook(
         webhook_data: Dict[str, Any] = Depends(verify_webhook_signature),
-        # token: str = Depends(security)  # Проверка токена авторизации (включить при выходе в прод)
+        token: str = Depends(security)
 ):
     try:
         # Валидация данных через Pydantic модель
@@ -125,10 +125,6 @@ async def update_transaction_status(
         currency_rate: str,
         amount_in_usd: str
 ):
-    """
-    Реализовать логику обновления статуса транзакции в базе данных (при необходимости)
-    """
-
     logger.info(f"Обновление транзакции {merchant_transaction_id}: статус={status}, оплачено={paid_amount}")
 
     # Временная заглушка

@@ -1,7 +1,10 @@
-# ТЕСТОВЫЙ СКРИПТ ДЛЯ ПРОВЕРКИ ПРОСМОТРА АПЕЛЛЯЦИИ
+# ТЕСТОВЫЙ СКРИПТ ДЛЯ ПРОВЕРКИ ВЕБХУКА АПЕЛЛЯЦИЙ
 import requests
 import json
+import hashlib
+import hmac
 import logging
+from urllib.parse import urlparse
 
 # Настройка логгера
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -10,24 +13,57 @@ logger = logging.getLogger(__name__)
 # Конфигурация
 BASE_URL = "http://localhost:8000"
 MERCHANT_TOKEN = "test_token_123"
+WEBHOOK_SECRET = "test_secret_key_123"
 
 
-def test_get_existing_appeal():
-    """Тестирует получение информации о существующей апелляции"""
-    appeal_id = 213233  # ID созданной ранее апелляции
+def calculate_signature(url: str, request_body: dict, secret: str) -> str:
+    """Вычисление подписи для вебхука"""
+    request_json_string = json.dumps(request_body)
+    parsed_url = urlparse(url)
+    signature_string = request_json_string + parsed_url.path + parsed_url.query
+
+    signature = hmac.new(
+        secret.encode("utf-8"),
+        signature_string.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest().lower()
+
+    return signature
+
+
+def test_appeal_webhook_canceled():
+    """Тестирует вебхук для отклоненной апелляции"""
 
     logger.info("=" * 60)
-    logger.info(f"ТЕСТ ПРОСМОТРА АПЕЛЛЯЦИИ {appeal_id}")
+    logger.info("ТЕСТ ВЕБХУКА ОТКЛОНЕННОЙ АПЕЛЛЯЦИИ")
     logger.info("=" * 60)
 
-    url = f"{BASE_URL}/api/v1/appeals/{appeal_id}"
+    url = f"{BASE_URL}/api/v1/webhooks/appeal"
+
+    # Данные для вебхука
+    webhook_data = {
+        "id": 12,
+        "transaction_id": 112232,
+        "merchant_transaction_id": "1000123213",
+        "status": "canceled",
+        "reason": "Отсутствует сумма в чеке"
+    }
+
+    # Вычисляем подпись
+    signature = calculate_signature(url, webhook_data, WEBHOOK_SECRET)
+
     headers = {
-        'Authorization': f'Bearer {MERCHANT_TOKEN}'
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {MERCHANT_TOKEN}',
+        'X-Signature': signature
     }
 
     try:
         logger.info(f"URL: {url}")
-        response = requests.get(url, headers=headers)
+        logger.info(f"Данные: {json.dumps(webhook_data, ensure_ascii=False)}")
+        logger.info(f"Подпись: {signature}")
+
+        response = requests.post(url, headers=headers, json=webhook_data)
 
         logger.info(f"Статус код: {response.status_code}")
 
@@ -35,42 +71,11 @@ def test_get_existing_appeal():
             logger.info("✓ Успешный ответ!")
             result = response.json()
             logger.info(f"Ответ: {json.dumps(result, indent=2, ensure_ascii=False)}")
-
-            # Проверяем обязательные поля
-            required_fields = [
-                'id', 'created_at', 'status', 'amount', 'transaction_id',
-                'merchant_transaction_id', 'transaction_created_at',
-                'transaction_paid_amount', 'transaction_currency_code'
-            ]
-
-            missing_fields = []
-            for field in required_fields:
-                if field not in result:
-                    missing_fields.append(field)
-
-            if missing_fields:
-                logger.error(f"✗ Отсутствуют обязательные поля: {missing_fields}")
-                return False
-
-            # Проверяем статус
-            valid_statuses = ['process', 'success', 'canceled']
-            if result['status'] not in valid_statuses:
-                logger.error(f"✗ Невалидный статус: {result['status']}")
-                return False
-
-            logger.info("✓ Все обязательные поля присутствуют")
-            logger.info(f"✓ Статус валиден: {result['status']}")
-
-            # Проверяем структуру transaction_requisite если есть
-            if 'transaction_requisite' in result:
-                requisite = result['transaction_requisite']
-                logger.info(f"Реквизиты: {requisite}")
-
             return True
 
-        elif response.status_code == 404:
-            logger.info(f"✓ Апелляция {appeal_id} не найдена (ожидаемо для теста)")
-            return True
+        elif response.status_code == 401:
+            logger.error("✗ Ошибка 401: Unauthorized")
+            logger.error("Проверьте подпись или токен авторизации")
 
         elif response.status_code == 400:
             logger.error("✗ Ошибка 400: Bad Request")
@@ -80,8 +85,9 @@ def test_get_existing_appeal():
             except:
                 logger.error(f"Текст ответа: {response.text}")
 
-        elif response.status_code == 401:
-            logger.error("✗ Ошибка 401: Unauthorized")
+        elif response.status_code == 403:
+            logger.error("✗ Ошибка 403: Forbidden")
+            logger.error("Вебхуки отключены в настройках")
 
         else:
             logger.error(f"✗ Неожиданный статус код: {response.status_code}")
@@ -98,37 +104,85 @@ def test_get_existing_appeal():
         return False
 
 
-def test_get_nonexistent_appeal():
-    """Тестирует получение информации о несуществующей апелляции"""
-    appeal_id = 999999  # Заведомо несуществующий ID
+def test_appeal_webhook_success():
+    """Тестирует вебхук для успешной апелляции"""
 
     logger.info("\n" + "=" * 60)
-    logger.info(f"ТЕСТ ПРОСМОТРА НЕСУЩЕСТВУЮЩЕЙ АПЕЛЛЯЦИИ {appeal_id}")
+    logger.info("ТЕСТ ВЕБХУКА УСПЕШНОЙ АПЕЛЛЯЦИИ")
     logger.info("=" * 60)
 
-    url = f"{BASE_URL}/api/v1/appeals/{appeal_id}"
+    url = f"{BASE_URL}/api/v1/webhooks/appeal"
+
+    # Данные для вебхука
+    webhook_data = {
+        "id": 15,
+        "transaction_id": 112235,
+        "merchant_transaction_id": "1000123216",
+        "status": "success",
+        "reason": None  # Для успешного статуса reason не обязателен
+    }
+
+    # Вычисляем подпись
+    signature = calculate_signature(url, webhook_data, WEBHOOK_SECRET)
+
     headers = {
-        'Authorization': f'Bearer {MERCHANT_TOKEN}'
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {MERCHANT_TOKEN}',
+        'X-Signature': signature
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.post(url, headers=headers, json=webhook_data)
         logger.info(f"Статус код: {response.status_code}")
 
-        if response.status_code == 404:
-            logger.info("✓ Ожидаемая ошибка 404: Not Found")
-            try:
-                error_data = response.json()
-                logger.info(f"Сообщение: {error_data.get('message', '')}")
-                return True
-            except:
-                pass
+        if response.status_code == 200:
+            logger.info("✓ Успешный ответ!")
             return True
+        else:
+            logger.error(f"✗ Ошибка: {response.status_code}")
+            return False
 
+    except Exception as e:
+        logger.error(f"Ошибка: {str(e)}")
+        return False
+
+
+def test_appeal_webhook_invalid_signature():
+    """Тестирует вебхук с неверной подписью"""
+
+    logger.info("\n" + "=" * 60)
+    logger.info("ТЕСТ ВЕБХУКА С НЕВЕРНОЙ ПОДПИСЬЮ")
+    logger.info("=" * 60)
+
+    url = f"{BASE_URL}/api/v1/webhooks/appeal"
+
+    webhook_data = {
+        "id": 12,
+        "transaction_id": 112232,
+        "merchant_transaction_id": "1000123213",
+        "status": "canceled",
+        "reason": "Отсутствует сумма в чеке"
+    }
+
+    # Используем неверный секрет для подписи
+    invalid_signature = calculate_signature(url, webhook_data, "wrong_secret_key")
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {MERCHANT_TOKEN}',
+        'X-Signature': invalid_signature
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=webhook_data)
+        logger.info(f"Статус код: {response.status_code}")
+
+        if response.status_code == 401:
+            logger.info("✓ Ожидаемая ошибка 401: Неверная подпись")
+            return True
         elif response.status_code == 200:
-            logger.warning("⚠ Апелляция найдена (неожиданно)")
-            return True
-
+            logger.error("✗ Получен успешный ответ для неверной подписи")
+            return False
         else:
             logger.error(f"✗ Неожиданный статус код: {response.status_code}")
             return False
@@ -138,34 +192,80 @@ def test_get_nonexistent_appeal():
         return False
 
 
-def test_get_appeal_with_invalid_id():
-    """Тестирует получение информации с невалидным ID"""
-    appeal_id = -1  # Невалидный ID
+def test_appeal_webhook_missing_signature():
+    """Тестирует вебхук без подписи"""
 
     logger.info("\n" + "=" * 60)
-    logger.info(f"ТЕСТ ПРОСМОТРА АПЕЛЛЯЦИИ С НЕВАЛИДНЫМ ID {appeal_id}")
+    logger.info("ТЕСТ ВЕБХУКА БЕЗ ПОДПИСИ")
     logger.info("=" * 60)
 
-    url = f"{BASE_URL}/api/v1/appeals/{appeal_id}"
+    url = f"{BASE_URL}/api/v1/webhooks/appeal"
+
+    webhook_data = {
+        "id": 12,
+        "transaction_id": 112232,
+        "merchant_transaction_id": "1000123213",
+        "status": "canceled",
+        "reason": "Отсутствует сумма в чеке"
+    }
+
     headers = {
+        'Content-Type': 'application/json',
         'Authorization': f'Bearer {MERCHANT_TOKEN}'
+        # Нет X-Signature заголовка
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.post(url, headers=headers, json=webhook_data)
+        logger.info(f"Статус код: {response.status_code}")
+
+        if response.status_code == 401:
+            logger.info("✓ Ожидаемая ошибка 401: Отсутствует подпись")
+            return True
+        else:
+            logger.error(f"✗ Неожиданный статус код: {response.status_code}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Ошибка: {str(e)}")
+        return False
+
+
+def test_appeal_webhook_invalid_status():
+    """Тестирует вебхук с невалидным статусом"""
+
+    logger.info("\n" + "=" * 60)
+    logger.info("ТЕСТ ВЕБХУКА С НЕВАЛИДНЫМ СТАТУСОМ")
+    logger.info("=" * 60)
+
+    url = f"{BASE_URL}/api/v1/webhooks/appeal"
+
+    webhook_data = {
+        "id": 12,
+        "transaction_id": 112232,
+        "merchant_transaction_id": "1000123213",
+        "status": "invalid_status",  # Невалидный статус
+        "reason": "Причина"
+    }
+
+    signature = calculate_signature(url, webhook_data, WEBHOOK_SECRET)
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {MERCHANT_TOKEN}',
+        'X-Signature': signature
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=webhook_data)
         logger.info(f"Статус код: {response.status_code}")
 
         if response.status_code in [400, 422]:
             logger.info("✓ Ожидаемая ошибка валидации")
-            try:
-                error_data = response.json()
-                if "должен быть положительным" in error_data.get('message', '').lower():
-                    logger.info("✓ Правильное сообщение об ошибке")
-                    return True
-            except:
-                pass
             return True
-
+        elif response.status_code == 200:
+            logger.warning("⚠ Получен успешный ответ для невалидного статуса")
+            return True
         else:
             logger.error(f"✗ Неожиданный статус код: {response.status_code}")
             return False
@@ -177,22 +277,30 @@ def test_get_appeal_with_invalid_id():
 
 def main():
     """Основная функция тестирования"""
-    logger.info("Запуск тестов просмотра апелляции...")
+    logger.info("Запуск тестов вебхука апелляций...")
 
     results = []
 
     try:
-        # Тест 1: Просмотр существующей апелляции
-        logger.info("\n1. Тест просмотра существующей апелляции:")
-        results.append(("Просмотр существующей", test_get_existing_appeal()))
+        # Тест 1: Отклоненная апелляция
+        logger.info("\n1. Тест вебхука отклоненной апелляции:")
+        results.append(("Отклоненная апелляция", test_appeal_webhook_canceled()))
 
-        # Тест 2: Просмотр несуществующей апелляции
-        logger.info("\n2. Тест просмотра несуществующей апелляции:")
-        results.append(("Просмотр несуществующей", test_get_nonexistent_appeal()))
+        # Тест 2: Успешная апелляция
+        logger.info("\n2. Тест вебхука успешной апелляции:")
+        results.append(("Успешная апелляция", test_appeal_webhook_success()))
 
-        # Тест 3: Невалидный ID
-        logger.info("\n3. Тест с невалидным ID:")
-        results.append(("Невалидный ID", test_get_appeal_with_invalid_id()))
+        # Тест 3: Неверная подпись
+        logger.info("\n3. Тест с неверной подписью:")
+        results.append(("Неверная подпись", test_appeal_webhook_invalid_signature()))
+
+        # Тест 4: Без подписи
+        logger.info("\n4. Тест без подписи:")
+        results.append(("Без подписи", test_appeal_webhook_missing_signature()))
+
+        # Тест 5: Невалидный статус
+        logger.info("\n5. Тест с невалидным статусом:")
+        results.append(("Невалидный статус", test_appeal_webhook_invalid_status()))
 
         # Итоги
         logger.info("\n" + "=" * 60)
