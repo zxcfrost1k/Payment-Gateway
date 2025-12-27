@@ -1,4 +1,4 @@
-# МОДЕЛИ ДАННЫХ (PayIn | Карта)
+# МОДЕЛИ ДАННЫХ ДЛЯ ТРАНЗАКЦИЙ
 import re
 
 from datetime import datetime
