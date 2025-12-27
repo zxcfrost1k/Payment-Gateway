@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation  # Точный десятичны
 from app.api.resources.paygatecore_resources.valid_resources import valid_res
 
 
-class PayOutCardRequest(BaseModel):
+class PayOutRequest(BaseModel):
     # Обязательные поля
     amount: str = Field(..., min_length=1, description="Сумма заявки")
     currency: str = Field(..., min_length=1, description="ISO код валюты")
@@ -21,10 +21,10 @@ class PayOutCardRequest(BaseModel):
     def validate_amount(csl, value: str) -> str:
         try:
             amount = Decimal(value)
-            if not re.match(r"^\d+$", value.strip()):
-                raise ValueError("Поле amount должно быть целым числом")
             if amount <= 0:
                 raise ValueError("Поле amount должно быть положительным числом")
+            if not re.match(r"^\d+$", value.strip()):
+                raise ValueError("Поле amount должно быть целым числом")
             if value.startswith("0"):
                 raise ValueError("Неправильный формат поля amount")
         except (ValueError, InvalidOperation):
@@ -39,7 +39,39 @@ class PayOutCardRequest(BaseModel):
         raise ValueError("Неправильный формат поля currency")
 
 
-class PayOutCardResponse(BaseModel):
+class PayOutRequest2(BaseModel):
+    # Обязательные поля
+    amount: str = Field(..., min_length=1, description="Сумма заявки")
+    currency: str = Field(..., min_length=1, description="ISO код валюты")
+    phone_number: str = Field(..., min_length=10, max_length=20, description="Номер карты")
+    bank_id: int = Field(..., description="Номер банка")
+    owner_name: str = Field(..., min_length=1, description="ФИО владельца карты")
+    merchant_transaction_id: str = Field(..., min_length=1, description="Идентификатор платежа")
+
+    @field_validator("amount")  # Валидация поля amount
+    @classmethod
+    def validate_amount(csl, value: str) -> str:
+        try:
+            amount = Decimal(value)
+            if amount <= 0:
+                raise ValueError("Поле amount должно быть положительным числом")
+            if not re.match(r"^\d+$", value.strip()):
+                raise ValueError("Поле amount должно быть целым числом")
+            if value.startswith("0"):
+                raise ValueError("Неправильный формат поля amount")
+        except (ValueError, InvalidOperation):
+            raise ValueError("Неправильный формат поля amount")
+        return value
+
+    @field_validator("currency")  # Валидация поля currency
+    @classmethod
+    def validate_currency(csl, value: str) -> str:
+        if value in valid_res.valid_currency:
+            return value
+        raise ValueError("Неправильный формат поля currency")
+
+
+class PayOutResponse(BaseModel):
     id: int  # Идентификатор платежа в системе провайдера
     merchant_transaction_id: str  # Идентификатор платежа в системе мерчанта
     expires_at: datetime  # Срок действия платежа

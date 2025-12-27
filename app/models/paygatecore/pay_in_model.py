@@ -1,4 +1,4 @@
-# МОДЕЛИ ДАННЫХ (PayIn | Карта (внутрибанк))
+# МОДЕЛИ ДАННЫХ (PayIn | Карта)
 import re
 
 from datetime import datetime
@@ -9,11 +9,10 @@ from decimal import Decimal, InvalidOperation  # Точный десятичны
 from app.api.resources.paygatecore_resources.valid_resources import valid_res
 
 
-class PayInCardBankRequest(BaseModel):
+class PayInRequest(BaseModel):
     # Обязательные поля
     amount: str = Field(..., min_length=1, description="Сумма заявки")
     currency: str = Field(..., min_length=1, description="ISO код валюты")
-    bank_name: str = Field(..., min_length=1, description="Наименование банка")
     merchant_transaction_id: str = Field(..., min_length=1, description="Идентификатор платежа")
     # Поля для уникализации
     auto_amount_limit: Optional[int] = Field(default=0, ge=0, le=20, description="Количество шагов для подбора")
@@ -49,7 +48,6 @@ class PayInCardBankRequest(BaseModel):
     def validate_currency_rate(csl, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
-
         try:
             currency_rate = Decimal(value)
             if currency_rate <= 0:
@@ -59,17 +57,17 @@ class PayInCardBankRequest(BaseModel):
         return value
 
 
-class PayInCardBankResponse(BaseModel):
+class PayInResponse(BaseModel):
     id: int  # Идентификатор платежа в системе провайдера
     merchant_transaction_id: str  # Идентификатор платежа в системе мерчанта
     expires_at: datetime  # Срок действия платежа
     amount: str  # Сумма транзакции
-    currency: str # Код валюты
+    currency: str  # Валюта
     currency_rate: str  # Курс валюты
     amount_in_usd: str  # Сумма транзакции в USD
     rate: str  # Тариф
     commission: str  # Коммисия
-    phone_number: str  # Номер телефона
+    card_number: str  # Номер счета
     owner_name: str  # Владелец счета
     bank_name: str  # Название банка
     country_name: str  # Название страны банка
@@ -77,17 +75,17 @@ class PayInCardBankResponse(BaseModel):
     payment_link: str  # Редирект
 
 
-class PayInCardBankResponse2(BaseModel):
+class PayInResponse2(BaseModel):
     id: int  # Идентификатор платежа в системе провайдера
     merchant_transaction_id: str  # Идентификатор платежа в системе мерчанта
     expires_at: datetime  # Срок действия платежа
     amount: str  # Сумма транзакции
-    currency: str # Код валюты
+    currency: str  # Валюта
     currency_rate: str  # Курс валюты
     amount_in_usd: str  # Сумма транзакции в USD
     rate: str  # Тариф
     commission: str  # Коммисия
-    phone_number: str  # Номер телефона
+    card_number: str  # Номер счета
     owner_name: str  # Владелец счета
     bank_name: str  # Название банка
     country_name: str  # Название страны банка

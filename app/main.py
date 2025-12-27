@@ -8,14 +8,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi import FastAPI, HTTPException, Request, Depends, Header
 
 from app.api.security.auth import security
-from app.models.paygatecore.other_models import ErrorResponse
 from app.api.resources.providers_resources import providers_res
-from app.api.services.default_provider_service import provider_service
-from app.models.paygatecore.card_models.pay_in_card_model import PayInCardRequest
-from app.api.resources.paygatecore_resources.valid_resources import valid_res
-from app.models.paygatecore.card_models.pay_in_card_bank_model import PayInCardBankRequest
+from app.models.paygatecore.pay_in_model import PayInRequest
+from app.models.paygatecore.pay_in_bank_model import PayInBankRequest
 from app.api.routers.paygatecore_router.transaction_webhook_router import router as webhook_router
-
+from app.models.paygatecore.pay_out_model import PayOutRequest, PayOutRequest2
 
 # Настройка логгера
 logging.basicConfig(level=logging.INFO)
@@ -158,7 +155,7 @@ async def root():
 # PayIn | Карта
 @app.post("/api/v1/transactions/card", tags=["payin"])
 async def pay_in_card(
-        request: PayInCardRequest,
+        request: PayInRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
@@ -190,8 +187,8 @@ async def pay_in_card(
 
 # PayIn | Карта (внутрибанк)
 @app.post("/api/v1/transactions/internal-card", tags=["payin"])
-async def pay_in_card_internal(
-        request: PayInCardBankRequest,
+async def pay_in_internal_card(
+        request: PayInBankRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
@@ -223,8 +220,8 @@ async def pay_in_card_internal(
 
 # PayIn | Карта (трансгран)
 @app.post("/api/v1/transactions/transgran-card", tags=["payin"])
-async def create_card_transaction_transgran_card_in(
-        request: PayInCardRequest,
+async def pay_in_transgran_card(
+        request: PayInRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
@@ -256,8 +253,8 @@ async def create_card_transaction_transgran_card_in(
 
 # PayIn | СБП
 @app.post("/api/v1/transactions/sbp", tags=["payin"])
-async def create_sbp_transaction_in(
-        request: PayInCardRequest,
+async def pay_in_sbp(
+        request: PayInRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
@@ -289,8 +286,8 @@ async def create_sbp_transaction_in(
 
 # PayIn | СБП (внутрибанк)
 @app.post("/api/v1/transactions/internal-sbp", tags=["payin"])
-async def create_sbp_transaction_internal_in(
-        request: PayInCardBankRequest,
+async def pay_in_internal_sbp(
+        request: PayInBankRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
@@ -322,8 +319,8 @@ async def create_sbp_transaction_internal_in(
 
 # PayIn | СБП (трансгран)
 @app.post("/api/v1/transactions/transgran-sbp", tags=["payin"])
-async def create_sbp_transaction_transgran_in(
-        request: PayInCardRequest,
+async def pay_in_transgran_sbp(
+        request: PayInRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
@@ -355,8 +352,8 @@ async def create_sbp_transaction_transgran_in(
 
 # PayIn | QR НСПК
 @app.post("/api/v1/transactions/qr", tags=["payin"])
-async def create_qr_transaction_in(
-        request: PayInCardRequest,
+async def pay_in_qr(
+        request: PayInRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
@@ -388,8 +385,8 @@ async def create_qr_transaction_in(
 
 # PayIn | СИМ-карта
 @app.post("/api/v1/transactions/sim", tags=["payin"])
-async def create_sim_transaction_in(
-        request: PayInCardRequest,
+async def pay_in_sim(
+        request: PayInRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
@@ -421,205 +418,67 @@ async def create_sim_transaction_in(
 
 # PayOut | Карта
 @app.post("/api/v1/transactions/payout-card", tags=["payout"])
-async def create_card_transaction_out(
-        request: PayInCardRequest,
+async def pay_out_card(
+        request: PayOutRequest,
         provider_name: str = Header(..., alias="Provider-data"),
         token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id} on provider: {provider_name}")
+        logger.info(f"Creating out transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: card")
 
-        pay_in_provider = ""
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
+            )
+
+        pay_in_provider = await provider.pay_out_card(request)
         return pay_in_provider
 
-    except Exception as e:
-        logger.error(f"Error creating (out) transaction: {str(e)}")
+    except HTTPException as e:
+        logger.info(f"Error with creating out transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: card")
         raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании вывода"
-            )
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayOut | СБП
-
-
-# PayIn | Отмена платежа
-@app.post(
-    "/transactions/{transaction_id}/cancel",
-    status_code=http_status.HTTP_204_NO_CONTENT,
-    responses={
-        204: {"description": "Transaction cancelled successfully"},
-        400: {"model": ErrorResponse, "description": "Transaction cannot be cancelled"},
-        401: {"description": "Unauthorized"},
-        500: {"description": "Internal server error"}
-    },
-    tags=["transaction tools"]
-)
-async def cancel_transaction(
-        transaction_id: str,
-        token: str = Depends(security)  # Проверка токена авторизации
+@app.post("/api/v1/transactions/payout-sbp", tags=["payout"])
+async def pay_out_sbp(
+        request: PayOutRequest2,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        await provider_service.cancel_transaction(transaction_id)
-        return None  # 204 No Content
+        logger.info(f"Creating out transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: sbp")
 
-    except Exception as e:
-        error_message = str(e)
-        if "Transaction should be in progress" in error_message:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=ErrorResponse(
-                    code="1",
-                    message="Transaction should be in progress."
-                )
-            )
-        else:
-            # Для других ошибок провайдера
-            raise HTTPException(
-                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=_create_error_response(
-                    code=str(e).split("\"")[3],
-                    message=str(e).split("\"")[-2]
-                )
-            )
-
-
-# Информация о платеже
-@app.post("/api/v1/transactions/{transaction_id}", tags=["transaction tools"])
-async def get_transaction_info(
-        transaction_id: str,
-        token: str = Depends(security)  # Проверка токена авторизации
-):
-    try:
-        transaction_info = await provider_service.get_transaction_info(transaction_id)
-        return transaction_info
-
-    except Exception as e:
-        logger.error(f"Error by get (in) transaction info: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code=str(e).split("\"")[3],
-                message=str(e).split("\"")[-2]
-            )
-        )
-
-
-# Получение информации о балансе
-@app.get("/api/v1/balance", tags=["balance"])
-async def get_balance(
-        token: str = Depends(security)  # Проверка токена авторизации
-):
-    try:
-        logger.info("Запрос баланса")
-
-        # Получение баланса через сервис провайдера
-        balance_info = await provider_service.get_balance()
-
-        logger.info(f"Баланс получен: {balance_info.balance} USD, курс: {balance_info.currency_rate}")
-        return balance_info
-
-    except Exception as e:
-        logger.error(f"Ошибка при получении баланса: {str(e)}")
-
-        # Извлечение структурированной ошибки
         try:
-            import json
-            error_str = str(e)
-            if error_str.startswith("{") and error_str.endswith("}"):
-                error_detail = json.loads(error_str)
-                if "code" in error_detail and "message" in error_detail:
-                    raise HTTPException(
-                        status_code=http_status.HTTP_400_BAD_REQUEST
-                        if error_detail["code"].startswith("4")
-                        else http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=error_detail
-                    )
-        except:
-            pass
-
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при получении баланса"
-            )
-        )
-
-
-# Получение информации о лимитах для указанной валюты
-@app.get("/api/v1/limits/{currency_code}", tags=["limits"])
-async def get_limits(
-        currency_code: str,
-        token: str = Depends(security)  # Проверка токена авторизации
-):
-    try:
-        logger.info(f"Запрос лимитов для валюты: {currency_code}")
-
-        # Валидация кода валюты
-        if not currency_code or not currency_code.strip():
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=_create_error_response(
-                    code="422",
-                    message="Код валюты не может быть пустым"
-                )
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
 
-        if currency_code not in valid_res.valid_currency:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=_create_error_response(
-                    code="422",
-                    message="Неподдерживаемый код валюты"
-                )
-            )
-
-        # Получение лимитов через сервис провайдера
-        limits_info = await provider_service.get_limits(currency_code.upper())
-
-        logger.info(f"Лимиты получены для валюты {currency_code}")
-        return limits_info
+        pay_in_provider = await provider.pay_out_sbp(request)
+        return pay_in_provider
 
     except HTTPException as e:
-        raise e
-    except ValueError as e:
-        logger.error(f"Ошибка валидации: {str(e)}")
+        logger.info(f"Error with creating out transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: sbp")
         raise HTTPException(
-            status_code=http_status.HTTP_400_BAD_REQUEST,
-            detail=_create_error_response(
-                code="422",
-                message=str(e)
-            )
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при получении лимитов: {str(e)}")
-
-        # Извлечение структурированной ошибки
-        try:
-            import json
-            error_str = str(e)
-            if error_str.startswith("{") and error_str.endswith("}"):
-                error_detail = json.loads(error_str)
-                if "code" in error_detail and "message" in error_detail:
-                    raise HTTPException(
-                        status_code=http_status.HTTP_400_BAD_REQUEST
-                        if error_detail["code"].startswith("4")
-                        else http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=error_detail
-                    )
-        except:
-            pass
-
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при получении лимитов"
-            )
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 

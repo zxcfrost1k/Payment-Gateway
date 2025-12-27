@@ -1,4 +1,4 @@
-# МОДЕЛИ ДАННЫХ (PayIn | Карта)
+# МОДЕЛИ ДАННЫХ (PayIn | Карта (внутрибанк))
 import re
 
 from datetime import datetime
@@ -9,10 +9,11 @@ from decimal import Decimal, InvalidOperation  # Точный десятичны
 from app.api.resources.paygatecore_resources.valid_resources import valid_res
 
 
-class PayInCardRequest(BaseModel):
+class PayInBankRequest(BaseModel):
     # Обязательные поля
     amount: str = Field(..., min_length=1, description="Сумма заявки")
     currency: str = Field(..., min_length=1, description="ISO код валюты")
+    bank_name: str = Field(..., min_length=1, description="Наименование банка")
     merchant_transaction_id: str = Field(..., min_length=1, description="Идентификатор платежа")
     # Поля для уникализации
     auto_amount_limit: Optional[int] = Field(default=0, ge=0, le=20, description="Количество шагов для подбора")
@@ -21,54 +22,18 @@ class PayInCardRequest(BaseModel):
     currency_rate: Optional[str] = Field(None, description="Курс валюты")
     client_id: Optional[str] = Field(None, description="Идентификатор клиента")
 
-    @field_validator("amount")  # Валидация поля amount
-    @classmethod
-    def validate_amount(csl, value: str) -> str:
-        try:
-            amount = Decimal(value)
-            if not re.match(r"^\d+$", value.strip()):
-                raise ValueError("Поле amount должно быть целым числом")
-            if amount <= 0:
-                raise ValueError("Поле amount должно быть положительным числом")
-            if value.startswith("0"):
-                raise ValueError("Неправильный формат поля amount")
-        except (ValueError, InvalidOperation):
-            raise ValueError("Неправильный формат поля amount")
-        return value
 
-    @field_validator("currency")  # Валидация поля currency
-    @classmethod
-    def validate_currency(csl, value: str) -> str:
-        if value in valid_res.valid_currency:
-            return value
-        raise ValueError("Неправильный формат поля currency")
-
-    @field_validator("currency_rate") # Валидация поля currency_rate
-    @classmethod
-    def validate_currency_rate(csl, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return value
-
-        try:
-            currency_rate = Decimal(value)
-            if currency_rate <= 0:
-                raise ValueError("Поле currency_rate должно быть положительным числом")
-        except (ValueError, InvalidOperation):
-            raise ValueError("Неправильный формат поля currency_rate")
-        return value
-
-
-class PayInCardResponse(BaseModel):
+class PayInBankResponse(BaseModel):
     id: int  # Идентификатор платежа в системе провайдера
     merchant_transaction_id: str  # Идентификатор платежа в системе мерчанта
     expires_at: datetime  # Срок действия платежа
     amount: str  # Сумма транзакции
-    currency: str  # Валюта
+    currency: str # Код валюты
     currency_rate: str  # Курс валюты
     amount_in_usd: str  # Сумма транзакции в USD
     rate: str  # Тариф
     commission: str  # Коммисия
-    card_number: str  # Номер счета
+    phone_number: str  # Номер телефона
     owner_name: str  # Владелец счета
     bank_name: str  # Название банка
     country_name: str  # Название страны банка
@@ -76,18 +41,53 @@ class PayInCardResponse(BaseModel):
     payment_link: str  # Редирект
 
 
-class PayInCardResponse2(BaseModel):
+class PayInBankResponse2(BaseModel):
     id: int  # Идентификатор платежа в системе провайдера
     merchant_transaction_id: str  # Идентификатор платежа в системе мерчанта
     expires_at: datetime  # Срок действия платежа
     amount: str  # Сумма транзакции
-    currency: str  # Валюта
+    currency: str # Код валюты
     currency_rate: str  # Курс валюты
     amount_in_usd: str  # Сумма транзакции в USD
     rate: str  # Тариф
     commission: str  # Коммисия
-    card_number: str  # Номер счета
+    phone_number: str  # Номер телефона
     owner_name: str  # Владелец счета
     bank_name: str  # Название банка
     country_name: str  # Название страны банка
     payment_currency: str  # Код валюты оплаты
+
+
+@field_validator("amount")  # Валидация поля amount
+def validate_amount(csl, value: str) -> str:
+    try:
+        amount = Decimal(value)
+        if amount <= 0:
+            raise ValueError("Поле amount должно быть положительным числом")
+        if not re.match(r"^\d+$", value.strip()):
+            raise ValueError("Поле amount должно быть целым числом")
+        if value.startswith("0"):
+           raise ValueError("Неправильный формат поля amount")
+    except (ValueError, InvalidOperation):
+        raise ValueError("Неправильный формат поля amount")
+    return value
+
+
+@field_validator("currency")  # Валидация поля currency
+def validate_currency(csl, value: str) -> str:
+    if value in valid_res.valid_currency:
+        return value
+    raise ValueError("Неправильный формат поля currency")
+
+
+@field_validator("currency_rate")  # Валидация поля currency_rate
+def validate_currency_rate(csl, value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return value
+    try:
+        currency_rate = Decimal(value)
+        if currency_rate <= 0:
+            raise ValueError("Поле currency_rate должно быть положительным числом")
+    except (ValueError, InvalidOperation):
+         raise ValueError("Неправильный формат поля currency_rate")
+    return value

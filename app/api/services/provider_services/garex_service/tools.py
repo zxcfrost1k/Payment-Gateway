@@ -5,17 +5,18 @@ from typing import Dict, Any
 
 from app.api.resources.garex_resources.bank_resources import bank_res
 from app.core.config import settings
-from app.models.paygatecore.card_models.pay_in_card_bank_model import (
-    PayInCardBankRequest,
-    PayInCardBankResponse,
-    PayInCardBankResponse2
+from app.models.paygatecore.pay_in_bank_model import (
+    PayInBankRequest,
+    PayInBankResponse,
+    PayInBankResponse2
 )
-from app.models.paygatecore.card_models.pay_in_card_model import (
-    PayInCardRequest,
-    PayInCardResponse,
-    PayInCardResponse2
+from app.models.paygatecore.pay_in_model import (
+    PayInRequest,
+    PayInResponse,
+    PayInResponse2
 )
-from app.models.paygatecore.qr_and_sim_models.pay_in_sim_model import PayInSimResponse
+from app.models.paygatecore.pay_out_model import PayOutRequest, PayOutRequest2, PayOutResponse
+from app.models.paygatecore.pay_in_sim_model import PayInSimResponse
 
 
 def _get_country(bank_code: str) -> str:
@@ -29,7 +30,7 @@ def _get_country(bank_code: str) -> str:
         return "Таджикистан"
 
 
-def transform_to_provider_format(request: PayInCardRequest, method: str) -> Dict[str, Any]:
+def transform_to_provider_format(request: PayInRequest, method: str) -> Dict[str, Any]:
     payload = {
         "orderId": request.merchant_transaction_id,
         "merchantId": settings.merchant_token,
@@ -42,7 +43,7 @@ def transform_to_provider_format(request: PayInCardRequest, method: str) -> Dict
     return payload
 
 
-def transform_to_provider_format_with_bank(request: PayInCardBankRequest, method: str, bank_code: str) -> Dict[str, Any]:
+def transform_to_provider_format_with_bank(request: PayInBankRequest, method: str, bank_code: str) -> Dict[str, Any]:
     payload = {
         "orderId": request.merchant_transaction_id,
         "merchantId": settings.merchant_token,
@@ -56,9 +57,39 @@ def transform_to_provider_format_with_bank(request: PayInCardBankRequest, method
     return payload
 
 
-def transform_from_provider_format(provider_response: Dict[str, Any]) -> PayInCardResponse:
+def transform_to_provider_format_for_out(request: PayOutRequest, method: str) -> Dict[str, Any]:
+    payload = {
+        "orderId": request.merchant_transaction_id,
+        "merchantId": settings.merchant_token,
+        "method": method,
+        "assetOrBank": "??",
+        "requisiteNumber": request.card_number,
+        "requisiteRecipient": request.owner_name,
+        "amount": int(request.amount),
+        "currency": request.currency,
+        "callbackUri": settings.webhook_base_url
+    }
+    return payload
+
+
+def transform_to_provider_format_for_out_2(request: PayOutRequest2, method: str, bank_code: str) -> Dict[str, Any]:
+    payload = {
+        "orderId": request.merchant_transaction_id,
+        "merchantId": settings.merchant_token,
+        "method": method,
+        "assetOrBank": bank_code,
+        "requisiteNumber": request.phone_number,
+        "requisiteRecipient": request.owner_name,
+        "amount": int(request.amount),
+        "currency": request.currency,
+        "callbackUri": settings.webhook_base_url
+    }
+    return payload
+
+
+def transform_from_provider_format(provider_response: Dict[str, Any]) -> PayInResponse:
     try:
-        return PayInCardResponse(
+        return PayInResponse(
             id=provider_response["result"]["id"],
             merchant_transaction_id=provider_response["result"]["orderId"],
             expires_at=datetime.now() + timedelta(minutes = 10),
@@ -82,9 +113,9 @@ def transform_from_provider_format(provider_response: Dict[str, Any]) -> PayInCa
         )
 
 
-def transform_from_provider_format_2(provider_response: Dict[str, Any]) -> PayInCardResponse2:
+def transform_from_provider_format_2(provider_response: Dict[str, Any]) -> PayInResponse2:
     try:
-        return PayInCardResponse2(
+        return PayInResponse2(
             id=provider_response["result"]["id"],
             merchant_transaction_id=provider_response["result"]["orderId"],
             expires_at=datetime.now() + timedelta(minutes=10),
@@ -130,9 +161,9 @@ def transform_from_provider_format_3(provider_response: Dict[str, Any]) -> PayIn
         )
 
 
-def transform_from_provider_format_with_bank(provider_response: Dict[str, Any]) -> PayInCardBankResponse:
+def transform_from_provider_format_with_bank(provider_response: Dict[str, Any]) -> PayInBankResponse:
     try:
-        return PayInCardBankResponse(
+        return PayInBankResponse(
             id=provider_response["result"]["id"],
             merchant_transaction_id=provider_response["result"]["orderId"],
             expires_at=datetime.now() + timedelta(minutes = 10),
@@ -156,9 +187,9 @@ def transform_from_provider_format_with_bank(provider_response: Dict[str, Any]) 
         )
 
 
-def transform_from_provider_format_with_bank_2(provider_response: Dict[str, Any]) -> PayInCardBankResponse2:
+def transform_from_provider_format_with_bank_2(provider_response: Dict[str, Any]) -> PayInBankResponse2:
     try:
-        return PayInCardBankResponse2(
+        return PayInBankResponse2(
             id=provider_response["result"]["id"],
             merchant_transaction_id=provider_response["result"]["orderId"],
             expires_at=datetime.now() + timedelta(minutes = 10),
@@ -173,6 +204,26 @@ def transform_from_provider_format_with_bank_2(provider_response: Dict[str, Any]
             bank_name=provider_response["result"]["bankName"],
             country_name=_get_country(provider_response["result"]["bank"]),
             payment_currency="RUB"
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=520,
+            detail="Неизвестная ошибка при получении ответа"
+        )
+
+
+def transform_from_provider_format_for_out(provider_response: Dict[str, Any]) -> PayOutResponse:
+    try:
+        return PayOutResponse(
+            id=provider_response["result"]["id"],
+            merchant_transaction_id=provider_response["result"]["orderId"],
+            expires_at=datetime.now() + timedelta(minutes = 10),
+            amount=str(provider_response["result"]["amount"]),
+            currency="RUB",
+            currency_rate=str(provider_response["result"]["rate"]),
+            amount_in_usd=str(provider_response["result"]["amount"] / provider_response["result"]["rate"]),
+            rate="",
+            commission=str(provider_response["result"]["fee"] * provider_response["result"]["amount"])
         )
     except KeyError:
         raise HTTPException(

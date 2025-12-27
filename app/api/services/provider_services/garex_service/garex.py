@@ -4,12 +4,13 @@ from fastapi import HTTPException
 
 from app.api.services.provider_services.garex_service import tools
 from app.core.config import settings
-from app.models.paygatecore.card_models.pay_in_card_bank_model import PayInCardBankResponse, PayInCardBankRequest, \
-    PayInCardBankResponse2
-from app.models.paygatecore.card_models.pay_in_card_model import PayInCardRequest, PayInCardResponse, PayInCardResponse2
+from app.models.paygatecore.pay_in_bank_model import PayInBankResponse, PayInBankRequest, \
+    PayInBankResponse2
+from app.models.paygatecore.pay_in_model import PayInRequest, PayInResponse, PayInResponse2
 from app.api.resources.garex_resources.bank_resources import bank_res
 from app.api.resources.garex_resources.transaction_resources import transactions_res
-from app.models.paygatecore.qr_and_sim_models.pay_in_sim_model import PayInSimResponse
+from app.models.paygatecore.pay_out_model import PayOutRequest, PayOutResponse, PayOutRequest2
+from app.models.paygatecore.pay_in_sim_model import PayInSimResponse
 
 HEADERS = {
         "Authorization": f"Bearer {settings.providers["garex"]["api_key"]}",
@@ -72,12 +73,12 @@ class GarexService:
         )
 
 
-    async def pay_in_card(self, request: PayInCardRequest) -> PayInCardResponse:
+    async def pay_in_card(self, request: PayInRequest) -> PayInResponse:
         try:
             method = transactions_res.PAYMENT_METHODS_CARD[0]
             provider_payload = tools.transform_to_provider_format(request, method)
             response = await self.client.post(
-                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                 headers=HEADERS,
                 json=provider_payload
             )
@@ -94,7 +95,7 @@ class GarexService:
             )
 
 
-    async def pay_in_internal_card(self, request: PayInCardBankRequest) -> PayInCardBankResponse:
+    async def pay_in_internal_card(self, request: PayInBankRequest) -> PayInBankResponse:
         try:
             try:
                 bank_code = bank_res.BANKS_RUS[request.bank_name]
@@ -122,7 +123,7 @@ class GarexService:
 
             provider_payload = tools.transform_to_provider_format_with_bank(request, method, bank_code)
             response = await self.client.post(
-                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                 headers=HEADERS,
                 json=provider_payload
             )
@@ -139,12 +140,12 @@ class GarexService:
             )
 
 
-    async def pay_in_transgran_card(self, request: PayInCardRequest) -> PayInCardResponse2:
+    async def pay_in_transgran_card(self, request: PayInRequest) -> PayInResponse2:
         try:
             method = transactions_res.PAYMENT_METHODS_CARD_TRANSGRAN[0]
             provider_payload = tools.transform_to_provider_format(request, method)
             response = await self.client.post(
-                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                 headers=HEADERS,
                 json=provider_payload
             )
@@ -159,7 +160,7 @@ class GarexService:
                 method = transactions_res.PAYMENT_METHODS_CARD_TRANSGRAN[1]
                 provider_payload = tools.transform_to_provider_format(request, method)
                 response = await self.client.post(
-                    f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                    f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                     headers=HEADERS,
                     json=provider_payload
                 )
@@ -175,12 +176,12 @@ class GarexService:
             )
 
 
-    async def pay_in_sbp(self, request: PayInCardRequest) -> PayInCardBankResponse:
+    async def pay_in_sbp(self, request: PayInRequest) -> PayInBankResponse:
         try:
             method = transactions_res.PAYMENT_METHODS_SBP[0]
             provider_payload = tools.transform_to_provider_format(request, method)
             response = await self.client.post(
-                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                 headers=HEADERS,
                 json=provider_payload
             )
@@ -197,7 +198,7 @@ class GarexService:
             )
 
 
-    async def pay_in_internal_sbp(self, request: PayInCardBankRequest) -> PayInCardBankResponse2:
+    async def pay_in_internal_sbp(self, request: PayInBankRequest) -> PayInBankResponse2:
         try:
             try:
                 bank_code = bank_res.BANKS_RUS[request.bank_name]
@@ -212,7 +213,7 @@ class GarexService:
             method = transactions_res.PAYMENT_METHODS_SBP[0]
             provider_payload = tools.transform_to_provider_format_with_bank(request, method, bank_code)
             response = await self.client.post(
-                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                 headers=HEADERS,
                 json=provider_payload
             )
@@ -229,12 +230,12 @@ class GarexService:
             )
 
 
-    async def pay_in_transgran_sbp(self, request: PayInCardRequest) -> PayInCardBankResponse2:
+    async def pay_in_transgran_sbp(self, request: PayInRequest) -> PayInBankResponse2:
         try:
             method = transactions_res.PAYMENT_METHODS_SBP_TRANSGRAN[0]
             provider_payload = tools.transform_to_provider_format(request, method)
             response = await self.client.post(
-                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                 headers=HEADERS,
                 json=provider_payload
             )
@@ -249,7 +250,7 @@ class GarexService:
                 method = transactions_res.PAYMENT_METHODS_SBP_TRANSGRAN[1]
                 provider_payload = tools.transform_to_provider_format(request, method)
                 response = await self.client.post(
-                    f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                    f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                     headers=HEADERS,
                     json=provider_payload
                 )
@@ -268,16 +269,19 @@ class GarexService:
     async def pay_in_qr(self):
         raise HTTPException(
             status_code=400,
-            detail="Провайдер не поддерживает данный вид оплаты: qr"
+            detail={
+                "code": "400",
+                "message": "Провайдер не поддерживает данный вид оплаты: qr"
+            }
         )
 
 
-    async def pay_in_sim(self, request: PayInCardRequest) -> PayInSimResponse:
+    async def pay_in_sim(self, request: PayInRequest) -> PayInSimResponse:
         try:
             method = transactions_res.PAYMENT_METHODS_SIM[0]
             provider_payload = tools.transform_to_provider_format(request, method)
             response = await self.client.post(
-                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/pay-in",
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payin",
                 headers=HEADERS,
                 json=provider_payload
             )
@@ -286,6 +290,61 @@ class GarexService:
             provider_response = response.json()
 
             return tools.transform_from_provider_format_3(provider_response)
+
+        except HTTPException as e:
+            raise HTTPException(
+                status_code=e.status_code,
+                detail=e.detail
+            )
+
+
+    async def pay_out_card(self, request: PayOutRequest) -> PayOutResponse:
+        try:
+            method = transactions_res.PAYMENT_METHODS_CARD[0]
+            provider_payload = tools.transform_to_provider_format_for_out(request, method)
+            response = await self.client.post(
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payout",
+                headers=HEADERS,
+                json=provider_payload
+            )
+            _handle_provider_status(response.status_code)
+            response.raise_for_status()
+            provider_response = response.json()
+
+            return tools.transform_from_provider_format_for_out(provider_response)
+
+        except HTTPException as e:
+            raise HTTPException(
+                status_code=e.status_code,
+                detail=e.detail
+            )
+
+
+    async def pay_out_sbp(self, request: PayOutRequest2) -> PayOutResponse:
+        try:
+            try:
+                # Наши коды?
+                bank_code = "sber" # Заглушка
+            except KeyError:
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "code": "404",
+                        "message": f"Банк: {request.bank_name} не найден в системе провайдера"                        }
+                )
+
+            method = transactions_res.PAYMENT_METHODS_SBP[0]
+            provider_payload = tools.transform_to_provider_format_for_out_2(request, method, bank_code)
+            response = await self.client.post(
+                f"{settings.providers["garex"]["base_url"]}/api/merchant/payments/payout",
+                headers=HEADERS,
+                json=provider_payload
+            )
+            _handle_provider_status(response.status_code)
+            response.raise_for_status()
+            provider_response = response.json()
+
+            return tools.transform_from_provider_format_for_out(provider_response)
 
         except HTTPException as e:
             raise HTTPException(
