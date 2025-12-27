@@ -1,30 +1,20 @@
 # ОСНОВНОЕ ПРИЛОЖЕНИЕ
 import logging
 
-from fastapi import FastAPI, HTTPException, Request, Form, UploadFile, File, Query, Depends
 from fastapi import status as http_status
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 from typing import Dict, List, Optional, Any
+from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI, HTTPException, Request, Depends, Header
 
-from app.api.resources.valid_res import valid_res
-from app.api.routers.appeal_webhook_router import router as appeal_webhook_router
-from app.api.routers.transaction_webhook_router import router as webhook_router
 from app.api.security.auth import security
-from app.api.services.provider_service import provider_service
-from app.core.config import settings
-from app.models.appeal_model import (
-    AppealCreateResponse,
-    AppealCreateRequest,
-    AppealDetailResponse,
-    AppealListResponse,
-    AppealListRequest
-)
-from app.models.card_models.in_card_transaction_internal_bank_model import InInternalCardTransactionRequest
-from app.models.card_models.in_card_transaction_model import InCardTransactionRequest
-from app.models.card_models.out_card_transaction_model import OutCardTransactionRequest
-from app.models.other_models import ErrorResponse
-from app.models.sbp_models.out_sbp_transaction_model import OutSbpTransactionRequest
+from app.models.paygatecore.other_models import ErrorResponse
+from app.api.resources.providers_resources import providers_res
+from app.api.services.default_provider_service import provider_service
+from app.models.paygatecore.card_models.pay_in_card_model import PayInCardRequest
+from app.api.resources.paygatecore_resources.valid_resources import valid_res
+from app.models.paygatecore.card_models.pay_in_card_bank_model import PayInCardBankRequest
+from app.api.routers.paygatecore_router.transaction_webhook_router import router as webhook_router
 
 
 # Настройка логгера
@@ -42,14 +32,12 @@ app = FastAPI(
 
 # Подключение роутеров
 app.include_router(webhook_router, prefix="/api/v1/webhooks", tags=["webhooks"])
-app.include_router(appeal_webhook_router, prefix="/api/v1/webhooks", tags=["webhooks"])
 
 
 # Создание ответа об ошибке
 def _create_error_response(code: str,
                            message: str,
-                           errors: Optional[Dict[str,
-                           List[str]]] = None) -> Dict[str, Any]:
+                           errors: Optional[Dict[str, List[str]]] = None) -> Dict[str, Any]:
     error_response: Dict[str, Any] = {
         "code": code,
         "message": message
@@ -169,351 +157,280 @@ async def root():
 
 # PayIn | Карта
 @app.post("/api/v1/transactions/card", tags=["payin"])
-async def create_card_transaction_in(
-        request: InCardTransactionRequest,
-        token: str = Depends(security) # Проверка токена авторизации
+async def pay_in_card(
+        request: PayInCardRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: card")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 12345,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "9.65",
-            "rate": "10",
-            "commission": "0.48",
-            "card_number": "1234123412344321",
-            "owner_name": "Дмитрий Н.",
-            "bank_name": "Альфа-Банк",
-            "country_name": "РФ",
-            "payment_currency": "RUB",
-            "payment_link": "https://example.com/payment-link"
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (in) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании транзакции"
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
+
+        pay_in_provider = await provider.pay_in_card(request)
+        return pay_in_provider
+
+    except HTTPException as e:
+        logger.info(f"Error with creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: card")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayIn | Карта (внутрибанк)
 @app.post("/api/v1/transactions/internal-card", tags=["payin"])
-async def create_card_transaction_internal_in(
-        request: InInternalCardTransactionRequest,
-        token: str = Depends(security) # Проверка токена авторизации
+async def pay_in_card_internal(
+        request: PayInCardBankRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: internal-card")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 12345,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency_rate": "103.67",
-            "amount_in_usd": "9.65",
-            "rate": "10",
-            "commission": "0.48",
-            "phone_number": "79204563423",
-            "owner_name": "Дима",
-            "bank_name": request.bank_name,
-            "country_name": "РФ",
-            "payment_currency": "RUB"
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (in) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании транзакции"
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
+
+        pay_in_provider = await provider.pay_in_internal_card(request)
+        return pay_in_provider
+
+    except HTTPException as e:
+        logger.info(f"Error with creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: internal-card")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayIn | Карта (трансгран)
 @app.post("/api/v1/transactions/transgran-card", tags=["payin"])
 async def create_card_transaction_transgran_card_in(
-        request: InCardTransactionRequest,
-        token: str = Depends(security) # Проверка токена авторизации
+        request: PayInCardRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: transgran-card")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 12345,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "9.65",
-            "rate": "10",
-            "commission": "0.48",
-            "phone_number": "79204563423",
-            "owner_name": "Дима",
-            "bank_name": "ВТБ",
-            "country_name": "РФ",
-            "payment_currency": "RUB"
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (in) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании транзакции"
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
+
+        pay_in_provider = await provider.pay_in_transgran_card(request)
+        return pay_in_provider
+
+    except HTTPException as e:
+        logger.info(f"Error with creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: transgran-card")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayIn | СБП
 @app.post("/api/v1/transactions/sbp", tags=["payin"])
 async def create_sbp_transaction_in(
-        request: InCardTransactionRequest,
-        token: str = Depends(security) # Проверка токена авторизации
+        request: PayInCardRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: sbp")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 12345,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "9.65",
-            "rate": "10",
-            "commission": "0.48",
-            "phone_number": "79204563423",
-            "owner_name": "Дима",
-            "bank_name": "ВТБ",
-            "country_name": "РФ",
-            "payment_currency": "RUB",
-            "payment_link": "https://example.com/payment-link"
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (in) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании транзакции"
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
+
+        pay_in_provider = await provider.pay_in_sbp(request)
+        return pay_in_provider
+
+    except HTTPException as e:
+        logger.info(f"Error with creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: sbp")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayIn | СБП (внутрибанк)
 @app.post("/api/v1/transactions/internal-sbp", tags=["payin"])
 async def create_sbp_transaction_internal_in(
-        request: InInternalCardTransactionRequest,
-        token: str = Depends(security)  # Проверка токена авторизации
+        request: PayInCardBankRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: internal-sbp")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 12345,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "9.65",
-            "rate": "10",
-            "commission": "0.48",
-            "phone_number": "79204563423",
-            "owner_name": "Дима",
-            "bank_name": "ВТБ",
-            "country_name": "РФ",
-            "payment_currency": "RUB"
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (in) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании транзакции"
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
+
+        pay_in_provider = await provider.pay_in_internal_sbp(request)
+        return pay_in_provider
+
+    except HTTPException as e:
+        logger.info(f"Error with creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: internal-sbp")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayIn | СБП (трансгран)
 @app.post("/api/v1/transactions/transgran-sbp", tags=["payin"])
 async def create_sbp_transaction_transgran_in(
-        request: InCardTransactionRequest,
-        token: str = Depends(security)  # Проверка токена авторизации
+        request: PayInCardRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: transgran-sbp")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 12345,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "9.65",
-            "rate": "10",
-            "commission": "0.48",
-            "phone_number": "79204563423",
-            "owner_name": "Дима",
-            "bank_name": "ВТБ",
-            "country_name": "РФ",
-            "payment_currency": "RUB"
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (in) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании транзакции"
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
+
+        pay_in_provider = await provider.pay_in_transgran_sbp(request)
+        return pay_in_provider
+
+    except HTTPException as e:
+        logger.info(f"Error with creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: transgran-sbp")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayIn | QR НСПК
 @app.post("/api/v1/transactions/qr", tags=["payin"])
 async def create_qr_transaction_in(
-        request: InCardTransactionRequest,
-        token: str = Depends(security)  # Проверка токена авторизации
+        request: PayInCardRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: qr")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 1496256,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "0.96",
-            "rate": "10",
-            "commission": "0.48",
-            "payment_url": "https://qr.nspk.ru/GJSKDFHGJKSDHFJHSDKSDFJFHJSDHF?type=01&bank=100000000004&crc=13DD"
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (in) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании транзакции"
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
+
+        pay_in_provider = await provider.pay_in_qr(request)
+        return pay_in_provider
+
+    except HTTPException as e:
+        logger.info(f"Error with creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: qr")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayIn | СИМ-карта
 @app.post("/api/v1/transactions/sim", tags=["payin"])
 async def create_sim_transaction_in(
-        request: InCardTransactionRequest,
-        token: str = Depends(security)  # Проверка токена авторизации
+        request: PayInCardRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction: {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: sim")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 1496256,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "0.96",
-            "rate": "10",
-            "commission": "0.48",
-            "phone_number": "+79861231212",
-            "owner_name": "Дима",
-            "operator": "Мегафон"
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (in) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании транзакции"
+        try:
+            provider = providers_res.PROVIDERS[provider_name]
+        except KeyError:
+            raise HTTPException(
+                status_code=404,
+                detail="Провайдер не найден в системе"
             )
+
+        pay_in_provider = await provider.pay_in_sim(request)
+        return pay_in_provider
+
+    except HTTPException as e:
+        logger.info(f"Error with creating transaction: "
+                    f"{request.merchant_transaction_id} on provider: {provider_name} "
+                    f"via method: sim")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail
         )
 
 
 # PayOut | Карта
 @app.post("/api/v1/transactions/payout-card", tags=["payout"])
 async def create_card_transaction_out(
-        request: OutCardTransactionRequest,
-        token: str = Depends(security)  # Проверка токена авторизации
+        request: PayInCardRequest,
+        provider_name: str = Header(..., alias="Provider-data"),
+        token: str = Depends(security)
 ):
     try:
-        logger.info(f"Creating transaction (out): {request.merchant_transaction_id}")
+        logger.info(f"Creating transaction: {request.merchant_transaction_id} on provider: {provider_name}")
 
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 12345,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "9.65",
-            "rate": "10",
-            "commission": "0.48",
-        }
+        pay_in_provider = ""
+        return pay_in_provider
 
     except Exception as e:
         logger.error(f"Error creating (out) transaction: {str(e)}")
@@ -527,39 +444,6 @@ async def create_card_transaction_out(
 
 
 # PayOut | СБП
-@app.post("/api/v1/transactions/payout-spb", tags=["payout"])
-async def create_sbp_transaction_out(
-        request: OutSbpTransactionRequest,
-        token: str = Depends(security) # Проверка токена авторизации
-):
-    try:
-        logger.info(f"Creating transaction (out): {request.merchant_transaction_id}")
-
-        # Ответ провайдера на запрос (включить при выходе в прод)
-        # result = await provider_service.create_card_transaction(request)
-
-        # Временно возвращаем заглушку вместо вызова провайдера (удалить при выходе в прод)
-        return {
-            "id": 12345,
-            "merchant_transaction_id": request.merchant_transaction_id,
-            "expires_at": "2025-01-20T21:49:41.918607Z",
-            "amount": request.amount,
-            "currency": request.currency,
-            "currency_rate": "103.67",
-            "amount_in_usd": "9.65",
-            "rate": "10",
-            "commission": "0.48",
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating (out) transaction: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании вывода"
-            )
-        )
 
 
 # PayIn | Отмена платежа
@@ -620,284 +504,6 @@ async def get_transaction_info(
             detail=_create_error_response(
                 code=str(e).split("\"")[3],
                 message=str(e).split("\"")[-2]
-            )
-        )
-
-
-# Создание апелляции
-@app.post("/api/v1/appeals/", response_model=AppealCreateResponse, tags=["appeals"])
-async def create_appeal(
-        transaction_id: str = Form(..., description="Идентификатор транзакции"),
-        amount: str = Form(..., description="Сумма апелляции"),
-        attachments: List[UploadFile] = File(
-            default=[],
-            description="Чеки, доказательства оплаты (изображения, видео, PDF)"
-        ),
-        token: str = Depends(security)  # Проверка токена авторизации
-):
-    try:
-        logger.info(f"Создание апелляции для транзакции {transaction_id}")
-
-        # Валидация входных данных через Pydantic модель
-        try:
-            request = AppealCreateRequest(
-                transaction_id=transaction_id,
-                amount=amount
-            )
-        except Exception as e:
-            logger.error(f"Ошибка валидации данных: {str(e)}")
-            raise HTTPException(
-                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=_create_error_response(
-                    code="422",
-                    message=str(e)
-                )
-            )
-
-        # Валидация файлов
-        if not attachments:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=_create_error_response(
-                    code="400",
-                    message="Необходимо прикрепить хотя бы один файл"
-                )
-            )
-
-        # Ограничение на количество файлов
-        if len(attachments) > settings.max_files_count:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=_create_error_response(
-                    code="422",
-                    message=f"Максимальное количество файлов: {settings.max_files_count}"
-                )
-            )
-
-        for file in attachments:
-            # Проверка MIME-типа
-            content_type = file.content_type or "application/octet-stream"
-            if content_type not in valid_res.valid_file_types:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=_create_error_response(
-                        code="422",
-                        message=f"Неподдерживаемый тип файла:"
-                                f" {content_type}. Разрешены:"
-                                f" {', '.join(valid_res.valid_file_types)}"
-                    )
-                )
-
-            # Проверка расширения файла
-            filename = file.filename.lower()
-            if not any(filename.endswith(ext) for ext in valid_res.valid_extensions):
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=_create_error_response(
-                        code="422",
-                        message=f"Неподдерживаемое расширение файла: {filename}"
-                    )
-                )
-
-        # Создание апелляции через провайдера
-        result = await provider_service.create_appeal(request, attachments)
-
-        logger.info(f"Апелляция создана успешно: id={result.id}")
-        return result
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Ошибка при создании апелляции: {str(e)}")
-
-        # Обработка структурированных ошибок от провайдера
-        try:
-            import json
-            error_str = str(e)
-            if error_str.startswith("{") and error_str.endswith("}"):
-                error_detail = json.loads(error_str)
-                if "code" in error_detail and "message" in error_detail:
-                    raise HTTPException(
-                        status_code=http_status.HTTP_400_BAD_REQUEST
-                        if error_detail["code"].startswith("4")
-                        else http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=error_detail
-                    )
-        except:
-            pass
-
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при создании апелляции"
-            )
-        )
-
-
-# Просмотр апелляции
-@app.get("/api/v1/appeals/{appeal_id}", response_model=AppealDetailResponse, tags=["appeals"])
-async def get_appeal_info(
-        appeal_id: int,
-        token: str = Depends(security) # Проверка токена авторизации
-):
-    try:
-        logger.info(f"Запрос информации об апелляции {appeal_id}")
-
-        # Валидация ID апелляции
-        if appeal_id <= 0:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=_create_error_response(
-                    code="422",
-                    message="ID апелляции должен быть положительным числом"
-                )
-            )
-
-        # Получение информации об апелляции через провайдера
-        appeal_info = await provider_service.get_appeal_info(appeal_id)
-
-        logger.info(f"Информация об апелляции {appeal_id} получена")
-        return appeal_info
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Ошибка при получении информации об апелляции {appeal_id}: {str(e)}")
-
-        # Обработка структурированных ошибок от провайдера
-        try:
-            import json
-            error_str = str(e)
-            if error_str.startswith("{") and error_str.endswith("}"):
-                error_detail = json.loads(error_str)
-                if "code" in error_detail and "message" in error_detail:
-                    code = error_detail["code"]
-                    message = error_detail["message"]
-
-                    if code == "404":
-                        raise HTTPException(
-                            status_code=http_status.HTTP_404_NOT_FOUND,
-                            detail=_create_error_response(
-                                code="404",
-                                message=message
-                            )
-                        )
-                    elif code.startswith("4"):
-                        raise HTTPException(
-                            status_code=http_status.HTTP_400_BAD_REQUEST,
-                            detail=_create_error_response(
-                                code=code,
-                                message=message
-                            )
-                        )
-                    else:
-                        raise HTTPException(
-                            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=_create_error_response(
-                                code=code,
-                                message=message
-                            )
-                        )
-        except:
-            pass
-
-        # Проверяем, не содержит ли ошибка "не найдена"
-        if "не найдена" in str(e).lower() or "not found" in str(e).lower():
-            raise HTTPException(
-                status_code=http_status.HTTP_404_NOT_FOUND,
-                detail=_create_error_response(
-                    code="404",
-                    message=f"Апелляция {appeal_id} не найдена"
-                )
-            )
-
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при получении информации об апелляции"
-            )
-        )
-
-
-# Получение списка апелляций с фильтрацией
-@app.get("/api/v1/appeals", response_model=AppealListResponse, tags=["appeals"])
-async def get_appeals_list(
-        status: Optional[str] = Query(None,
-                                      description="Статус апелляции"),
-        transaction_id: Optional[int] = Query(None,
-                                              description="Идентификатор транзакции"),
-        merchant_transaction_id: Optional[str] = Query(None,
-                                                       description="Идентификатор транзакции в системе мерчанта"),
-        page_size: int = Query(default=10,
-                               ge=1,
-                               le=100,
-                               description="Количество элементов на странице"),
-        page_number: int = Query(default=1,
-                                 ge=1,
-                                 description="Номер страницы"),
-        token: str = Depends(security)  # Проверка токена авторизации
-):
-    try:
-        logger.info(f"Запрос списка апелляций с фильтрами: "
-                    f"status={status}, "
-                    f"transaction_id={transaction_id}, "
-                    f"merchant_transaction_id={merchant_transaction_id}, "
-                    f"page_size={page_size}, "
-                    f"page_number={page_number}")
-
-        # Валидация входных данных через Pydantic модель
-        try:
-            request = AppealListRequest(
-                status=status,
-                transaction_id=transaction_id,
-                merchant_transaction_id=merchant_transaction_id,
-                page_size=page_size,
-                page_number=page_number
-            )
-        except Exception as e:
-            logger.error(f"Ошибка валидации параметров запроса: {str(e)}")
-            raise HTTPException(
-                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=_create_error_response(
-                    code="422",
-                    message=str(e)
-                )
-            )
-
-        # Получение списка апелляций через провайдера
-        appeals_list = await provider_service.get_appeals_list(request)
-
-        logger.info(f"Список апелляций получен: {len(appeals_list.items)} элементов")
-        return appeals_list
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Ошибка при получении списка апелляций: {str(e)}")
-
-        # Обработка структурированных ошибок от провайдера
-        try:
-            import json
-            error_str = str(e)
-            if error_str.startswith("{") and error_str.endswith("}"):
-                error_detail = json.loads(error_str)
-                if "code" in error_detail and "message" in error_detail:
-                    raise HTTPException(
-                        status_code=http_status.HTTP_400_BAD_REQUEST
-                        if error_detail["code"].startswith("4")
-                        else http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=error_detail
-                    )
-        except:
-            pass
-
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_create_error_response(
-                code="500",
-                message="Ошибка при получении списка апелляций"
             )
         )
 

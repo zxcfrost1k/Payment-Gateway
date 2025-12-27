@@ -1,8 +1,8 @@
-# СТАТУСЫ ПЛАТЕЖЕЙ
+# ПЛАТЕЖНЫЕ РЕСУРСЫ
 from typing import List
 
 
-class TransactionStatuses:
+class TransactionResources:
     # Возможные статусы платежей
     STATUS_PAID = "paid"  # оплачено
     STATUS_UNDERPAID = "underpaid"  # недоплачено
@@ -35,9 +35,9 @@ class TransactionStatuses:
 
     # Типы транзакций
     TRANSACTION_TYPES: List[str] = [
-        "in",  # входящий платеж
-        "out"  # исходящий платеж
+        "in",
+        "out"
     ]
 
 
-transaction_statuses = TransactionStatuses()
+transaction_res = TransactionResources

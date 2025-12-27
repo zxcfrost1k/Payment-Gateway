@@ -6,10 +6,10 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from decimal import Decimal, InvalidOperation  # Точный десятичный тип данных
 
-from app.api.resources.valid_res import valid_res
+from app.api.resources.paygatecore_resources.valid_resources import valid_res
 
 
-class InInternalCardTransactionRequest(BaseModel):
+class PayInCardBankRequest(BaseModel):
     # Обязательные поля
     amount: str = Field(..., min_length=1, description="Сумма заявки")
     currency: str = Field(..., min_length=1, description="ISO код валюты")
@@ -59,11 +59,30 @@ class InInternalCardTransactionRequest(BaseModel):
         return value
 
 
-class InInternalCardTransactionResponse(BaseModel):
+class PayInCardBankResponse(BaseModel):
     id: int  # Идентификатор платежа в системе провайдера
     merchant_transaction_id: str  # Идентификатор платежа в системе мерчанта
     expires_at: datetime  # Срок действия платежа
     amount: str  # Сумма транзакции
+    currency: str # Код валюты
+    currency_rate: str  # Курс валюты
+    amount_in_usd: str  # Сумма транзакции в USD
+    rate: str  # Тариф
+    commission: str  # Коммисия
+    phone_number: str  # Номер телефона
+    owner_name: str  # Владелец счета
+    bank_name: str  # Название банка
+    country_name: str  # Название страны банка
+    payment_currency: str  # Код валюты оплаты
+    payment_link: str  # Редирект
+
+
+class PayInCardBankResponse2(BaseModel):
+    id: int  # Идентификатор платежа в системе провайдера
+    merchant_transaction_id: str  # Идентификатор платежа в системе мерчанта
+    expires_at: datetime  # Срок действия платежа
+    amount: str  # Сумма транзакции
+    currency: str # Код валюты
     currency_rate: str  # Курс валюты
     amount_in_usd: str  # Сумма транзакции в USD
     rate: str  # Тариф

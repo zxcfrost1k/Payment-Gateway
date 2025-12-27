@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 from app.api.security.auth import security
 from app.core.config import settings
-from app.models.other_models import WebhookRequest
+from app.models.paygatecore.other_models import WebhookRequest
 from app.api.services.signature_service import verify_signature
 
 
