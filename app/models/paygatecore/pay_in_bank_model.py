@@ -1,4 +1,4 @@
-# МОДЕЛИ ДАННЫХ (PayIn | Карта (внутрибанк))
+# МОДЕЛИ ДАННЫХ ДЛЯ ТРАНЗАКЦИЙ ВНУТРИБАНК
 import re
 
 from datetime import datetime

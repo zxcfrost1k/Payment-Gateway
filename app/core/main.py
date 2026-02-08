@@ -14,12 +14,11 @@ from app.models.paygatecore.pay_in_bank_model import PayInBankRequest
 from app.api.services.provider_services.garex_service.webhook_router import router as webhook_router
 from app.models.paygatecore.pay_out_model import PayOutRequest, PayOutRequest2
 
-# Настройка логгера
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# Инициализация приложения
 app = FastAPI(
     title="Payment API Gateway",
     description="Сервис трансляции API между нашей системой и провайдером",
